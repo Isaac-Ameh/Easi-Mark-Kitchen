@@ -6,6 +6,7 @@ import { clerkMiddleware, createClerkClient } from '@clerk/express';
 import {
   type AuthenticatedRequest,
   createRequireAuthenticatedSession,
+  getOwnerEmails,
   getPaystackSecretKey,
   getServerClerkKeys,
   isManagerRole,
@@ -526,7 +527,7 @@ export function createApiApp(): express.Express {
       ownerCount,
       targetUser: {
         userId: 'user_3MO1hRh9claBMXmUlxErDtfNwDE',
-        email: 'mularn622@gmail.com',
+        ownerEmailConfigured: getOwnerEmails().length > 0,
         profileFound: Boolean(targetUserProfile),
         profileData: targetUserProfile,
       },
