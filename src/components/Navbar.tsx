@@ -9,7 +9,6 @@ const NAV_LINKS = [
   { label: 'Home', to: '/' },
   { label: 'Our Menu', to: '/menu' },
   { label: 'About Us', to: '/about' },
-  { label: 'Gallery', to: '/gallery' },
   { label: 'Contact', to: '/contact' },
 ];
 

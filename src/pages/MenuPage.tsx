@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { MessageCircle } from 'lucide-react';
 import {
-  MEALS,
   RESTAURANT_IMAGES,
   RESTAURANT_INFO,
   buildWhatsAppOrderUrl,
 } from '../data/meals';
 import { MealCategory } from '../types/menu';
+import { useMenu } from '../context/MenuContext';
 import { PageHero } from '../components/PageHero';
 import { MealCard } from '../components/MealCard';
+import { DishImage } from '../components/DishImage';
 
 type FilterOption = 'All Meals' | MealCategory;
 
@@ -20,6 +21,7 @@ const CATEGORIES: FilterOption[] = [
 ];
 
 export function MenuPage() {
+  const { meals, siteSettings } = useMenu();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialParam = searchParams.get('category') as FilterOption | null;
 
@@ -47,11 +49,12 @@ export function MenuPage() {
 
   const filteredMeals =
     selectedCategory === 'All Meals'
-      ? MEALS
-      : MEALS.filter((meal) => meal.category === selectedCategory);
+      ? meals
+      : meals.filter((meal) => meal.category === selectedCategory);
 
+  const phoneDisplay = siteSettings.phone || RESTAURANT_INFO.phoneDisplay;
   const priceInquiryUrl = buildWhatsAppOrderUrl(
-    'Hello Easi Mark Kitchen, please share today’s menu prices in Naira (₦).'
+    `Hello ${siteSettings.restaurantName}, please share today’s menu prices in Naira (₦).`
   );
 
   return (
@@ -59,7 +62,7 @@ export function MenuPage() {
       <PageHero
         eyebrow="Easi Mark Kitchen Menu"
         title="Explore Our Menu"
-        subtitle="Authentic Nigerian main dishes, swallows, and traditional soups prepared for Ugbowo and Benin City."
+        subtitle="Authentic Nigerian main dishes, swallows, and traditional soups prepared daily for Ugbowo and Benin City."
         image={RESTAURANT_IMAGES.hero}
         imageAlt="Plate of Nigerian Jollof Rice served with seasoned chicken"
       />
@@ -76,8 +79,8 @@ export function MenuPage() {
               {CATEGORIES.map((category) => {
                 const count =
                   category === 'All Meals'
-                    ? MEALS.length
-                    : MEALS.filter((m) => m.category === category).length;
+                    ? meals.length
+                    : meals.filter((m) => m.category === category).length;
                 const isActive = selectedCategory === category;
 
                 return (
@@ -101,33 +104,66 @@ export function MenuPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-[#57534E]">
-              <span>
-                Prices confirmed upon inquiry via{' '}
-                <a
-                  href={RESTAURANT_INFO.phoneTel}
-                  className="font-semibold text-[#5A0B1E] hover:underline tabular-nums"
-                >
-                  {RESTAURANT_INFO.phoneDisplay}
-                </a>
-                .
-              </span>
+              <span>{siteSettings.menuNotice}</span>
               <a
                 href={priceInquiryUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15803D] hover:bg-[#166534] text-white text-xs font-semibold transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15803D] hover:bg-[#166534] text-white text-xs font-semibold transition-colors shrink-0"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
-                <span>Ask Prices on WhatsApp</span>
+                <span>Ask Prices on WhatsApp ({phoneDisplay})</span>
               </a>
             </div>
           </div>
 
-          {/* Meals Grid */}
+          {/* Complete Meals Grid */}
           <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
             {filteredMeals.map((meal) => (
               <MealCard key={meal.id} meal={meal} />
             ))}
+          </div>
+
+          {/* Culinary Showcase Consolidated into Our Menu */}
+          <div className="mt-16 rounded-2xl bg-[#F4EFE8] border border-[#5A0B1E]/12 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-12 items-center">
+              <div className="lg:col-span-5 aspect-[4/3] lg:aspect-auto lg:h-full bg-[#EBE3D5]">
+                <DishImage
+                  src={RESTAURANT_IMAGES.culinaryPrep}
+                  alt="Simmering pot of Nigerian Egusi Soup served in Easi Mark Kitchen"
+                  title="Easi Mark Kitchen Cooking"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="lg:col-span-7 p-6 sm:p-10 space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#B91C1C]">
+                  From Our Ugbowo Kitchen
+                </p>
+                <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#1C1917]">
+                  Fresh Pots Simmering Every Day
+                </h2>
+                <p className="text-sm sm:text-base text-[#57534E] leading-relaxed">
+                  Every dish on our menu—from Jollof Rice &amp; Chicken, Fried Rice &amp; Beef,
+                  Spaghetti, Beans &amp; Plantain, and Dodo to Semovita, Santana, Egusi Soup, Edo
+                  Black Soup, and Ogbono Soup—is cooked fresh at {siteSettings.address}. Planning a
+                  group lunch or campus event?
+                </p>
+                <div className="pt-2 flex flex-wrap gap-3">
+                  <Link
+                    to="/contact"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#5A0B1E] hover:bg-[#731129] text-white text-sm font-medium transition-colors"
+                  >
+                    <span>Request Catering / Bulk Order</span>
+                  </Link>
+                  <Link
+                    to="/cart"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#5A0B1E]/25 text-[#5A0B1E] hover:bg-white text-sm font-medium transition-colors"
+                  >
+                    <span>Review Order Cart</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

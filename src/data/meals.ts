@@ -1,4 +1,4 @@
-import { Meal } from '../types/menu';
+import { Meal, WebsiteSettings } from '../types/menu';
 
 export const RESTAURANT_INFO = {
   name: 'Easi Mark Kitchen',
@@ -18,11 +18,45 @@ export const RESTAURANT_INFO = {
     'https://maps.google.com/maps?q=BDPA%20Ugbowo%20Benin%20City%20Nigeria&t=&z=15&ie=UTF8&iwloc=&output=embed',
 };
 
+export const DEFAULT_WEBSITE_SETTINGS: WebsiteSettings = {
+  restaurantName: 'Easi Mark Kitchen',
+  currency: 'NGN',
+  isOpen: true,
+  address:
+    '3, Otabor Olubor Isihor, BDPA Street, Back of Nadia Bakery, Ugbowo, Benin City, Nigeria',
+  phone: '07076537119',
+  email: 'contact@easimarkkitchen.ng',
+  openingHours: 'Mon – Sat: 8:00 AM – 8:30 PM | Sun: 12:00 PM – 7:30 PM',
+  heroSubtitle: 'Satisfying Nigerian Meals, Traditional Soups & Daily Classics in Ugbowo.',
+  heroDescription:
+    'Serving Jollof Rice & Chicken, Fried Rice & Beef, Beans & Plantain, Spaghetti, Dodo, Santana, Semovita, Egusi Soup, Black Soup, and Ogbono Soup from our BDPA Street kitchen back of Nadia Bakery.',
+  welcomeHeading: 'Hearty Nigerian Meals & Edo Favourites in Ugbowo.',
+  welcomeBody:
+    'Located at 3, Otabor Olubor Isihor, BDPA Street, Back of Nadia Bakery, Ugbowo, Benin City, Easi Mark Kitchen serves freshly prepared Nigerian everyday meals and comforting traditional soups to students, families, and workers across the neighbourhood.',
+  menuNotice:
+    'All 10 dishes are available for order. Call or chat via 07076537119 if a price is listed as Contact for Price.',
+};
+
 export const RESTAURANT_IMAGES = {
   hero: '/src/assets/images/hero_nigerian_jollof.jpg',
   culinaryPrep: '/src/assets/images/culinary_egusi_pot.jpg',
   aboutTable: '/src/assets/images/dish_fried_rice_beef.jpg',
 };
+
+export const AVAILABLE_DISH_IMAGES = [
+  { label: 'Jollof Rice & Chicken', path: '/src/assets/images/dish_jollof_chicken.jpg' },
+  { label: 'Fried Rice & Beef', path: '/src/assets/images/dish_fried_rice_beef.jpg' },
+  { label: 'Spaghetti', path: '/src/assets/images/dish_spaghetti.jpg' },
+  { label: 'Beans & Plantain', path: '/src/assets/images/dish_beans_plantain.jpg' },
+  { label: 'Dodo (Fried Plantain)', path: '/src/assets/images/dish_dodo.jpg' },
+  { label: 'Santana (Cassava Fufu)', path: '/src/assets/images/dish_santana.jpg' },
+  { label: 'Semovita', path: '/src/assets/images/dish_semovita.jpg' },
+  { label: 'Egusi Soup', path: '/src/assets/images/dish_egusi_soup.jpg' },
+  { label: 'Black Soup', path: '/src/assets/images/dish_black_soup.jpg' },
+  { label: 'Ogbono Soup', path: '/src/assets/images/dish_ogbono_soup.jpg' },
+  { label: 'Kitchen Egusi Pot', path: '/src/assets/images/culinary_egusi_pot.jpg' },
+  { label: 'Kitchen Jollof Hero', path: '/src/assets/images/hero_nigerian_jollof.jpg' },
+];
 
 export const MEALS: Meal[] = [
   {

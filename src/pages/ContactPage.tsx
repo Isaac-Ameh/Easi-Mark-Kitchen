@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   CheckCircle2,
+  Clock,
   ExternalLink,
   MapPin,
   MessageCircle,
@@ -12,6 +13,7 @@ import {
   RESTAURANT_INFO,
   buildWhatsAppOrderUrl,
 } from '../data/meals';
+import { useMenu } from '../context/MenuContext';
 import { PageHero } from '../components/PageHero';
 
 interface FormErrors {
@@ -21,11 +23,26 @@ interface FormErrors {
 }
 
 export function ContactPage() {
+  const { siteSettings } = useMenu();
+  const [enquiryMode, setEnquiryMode] = useState<'meal' | 'catering'>('meal');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [eventType, setEventType] = useState('Campus / Birthday Catering');
+  const [eventDate, setEventDate] = useState('');
+  const [guestCount, setGuestCount] = useState('30');
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [cateringSaved, setCateringSaved] = useState(false);
+
+  const phoneDisplay = siteSettings.phone || RESTAURANT_INFO.phoneDisplay;
+  const address = siteSettings.address || RESTAURANT_INFO.address;
+  const phoneDigits = phoneDisplay.replace(/[^0-9]/g, '');
+  const phoneTel = phoneDigits.startsWith('0')
+    ? `tel:+234${phoneDigits.slice(1)}`
+    : `tel:+${phoneDigits}`;
 
   const validate = (): FormErrors => {
     const nextErrors: FormErrors = {};
@@ -36,12 +53,12 @@ export function ContactPage() {
       nextErrors.phone = 'Please enter your phone number or WhatsApp contact.';
     }
     if (!message.trim() || message.trim().length < 6) {
-      nextErrors.message = 'Please enter your meal enquiry or message (at least 6 characters).';
+      nextErrors.message = 'Please enter your meal or catering details (at least 6 characters).';
     }
     return nextErrors;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
@@ -50,11 +67,48 @@ export function ContactPage() {
       return;
     }
 
-    const composed = `Hello Easi Mark Kitchen,\nName: ${name.trim()}\nPhone: ${phone.trim()}\nMessage: ${message.trim()}`;
     setErrors({});
+    setCateringSaved(false);
+
+    if (enquiryMode === 'catering') {
+      setSubmitting(true);
+      try {
+        const res = await fetch('/api/catering', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientName: name.trim(),
+            phone: phone.trim(),
+            email: email.trim(),
+            eventType: eventType.trim(),
+            eventDate: eventDate.trim(),
+            guestCount: Number(guestCount) || 25,
+            requestedDishes: message.trim(),
+            notes: `Submitted via Contact page (${eventType})`,
+          }),
+        });
+        if (res.ok) {
+          setCateringSaved(true);
+        }
+      } catch {
+        // Still allow WhatsApp handoff below
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
+    const composed =
+      enquiryMode === 'catering'
+        ? `Hello ${siteSettings.restaurantName},\nCatering Enquiry:\nName: ${name.trim()}\nPhone: ${phone.trim()}\nEvent: ${eventType}\nDate: ${
+            eventDate || 'TBD'
+          }\nGuests: ${guestCount}\nDishes/Notes: ${message.trim()}`
+        : `Hello ${siteSettings.restaurantName},\nName: ${name.trim()}\nPhone: ${phone.trim()}\nMessage: ${message.trim()}`;
+
     setSubmittedMessage(composed);
     setName('');
     setPhone('');
+    setEmail('');
+    setEventDate('');
     setMessage('');
   };
 
@@ -62,8 +116,8 @@ export function ContactPage() {
     <div>
       <PageHero
         eyebrow="Location & Contact"
-        title="Visit or Contact Easi Mark Kitchen"
-        subtitle="Find us in Ugbowo, Benin City—or reach out directly by phone or WhatsApp for meal availability and orders."
+        title={`Visit or Contact ${siteSettings.restaurantName}`}
+        subtitle="Find us in Ugbowo, Benin City—or reach out directly by phone, WhatsApp, or catering enquiry."
         image={RESTAURANT_IMAGES.hero}
         imageAlt="Plate of Nigerian Jollof Rice served with fried chicken"
       />
@@ -78,12 +132,12 @@ export function ContactPage() {
                   Ugbowo · Benin City
                 </p>
                 <h2 className="mt-2 font-display text-2xl sm:text-3xl font-semibold text-[#1C1917]">
-                  Easi Mark Kitchen
+                  {siteSettings.restaurantName}
                 </h2>
                 <p className="mt-3 text-sm text-[#57534E] leading-relaxed">
                   Stop by our restaurant off BDPA Street (behind Nadia Bakery) or call / message us
-                  on WhatsApp to confirm meal availability, current Naira (₦) prices, and pickup or
-                  order arrangements.
+                  on WhatsApp to confirm meal availability, Naira (₦) pricing, pickup, or event
+                  catering.
                 </p>
               </div>
 
@@ -92,9 +146,7 @@ export function ContactPage() {
                   <MapPin className="w-5 h-5 text-[#5A0B1E] shrink-0 mt-0.5" />
                   <div>
                     <h3 className="text-sm font-semibold text-[#1C1917]">Address</h3>
-                    <p className="mt-0.5 text-sm text-[#57534E] leading-relaxed">
-                      {RESTAURANT_INFO.address}
-                    </p>
+                    <p className="mt-0.5 text-sm text-[#57534E] leading-relaxed">{address}</p>
                     <a
                       href={RESTAURANT_INFO.googleMapsUrl}
                       target="_blank"
@@ -114,17 +166,14 @@ export function ContactPage() {
                       Phone &amp; WhatsApp
                     </h3>
                     <p className="mt-0.5 text-sm text-[#57534E] tabular-nums">
-                      <a
-                        href={RESTAURANT_INFO.phoneTel}
-                        className="font-semibold text-[#5A0B1E] hover:underline"
-                      >
-                        {RESTAURANT_INFO.phoneDisplay}
+                      <a href={phoneTel} className="font-semibold text-[#5A0B1E] hover:underline">
+                        {phoneDisplay}
                       </a>
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2.5">
                       <a
                         href={buildWhatsAppOrderUrl(
-                          'Hello Easi Mark Kitchen, I would like to ask about today’s meals.'
+                          `Hello ${siteSettings.restaurantName}, I would like to ask about today’s meals.`
                         )}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -134,13 +183,24 @@ export function ContactPage() {
                         <span>Message on WhatsApp</span>
                       </a>
                       <a
-                        href={RESTAURANT_INFO.phoneTel}
+                        href={phoneTel}
                         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#5A0B1E] hover:bg-[#731129] text-white text-xs font-semibold transition-colors tabular-nums"
                       >
                         <Phone className="w-3.5 h-3.5" />
-                        <span>Call {RESTAURANT_INFO.phoneDisplay}</span>
+                        <span>Call {phoneDisplay}</span>
                       </a>
                     </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3.5">
+                  <Clock className="w-5 h-5 text-[#5A0B1E] shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#1C1917]">Opening Hours</h3>
+                    <p className="mt-0.5 text-sm text-[#57534E]">{siteSettings.openingHours}</p>
+                    <p className="mt-1 text-xs font-medium text-[#15803D]">
+                      {siteSettings.isOpen ? 'Kitchen Open for Service' : 'Currently Closed'}
+                    </p>
                   </div>
                 </div>
 
@@ -149,26 +209,52 @@ export function ContactPage() {
                   <div>
                     <h3 className="text-sm font-semibold text-[#1C1917]">Services</h3>
                     <p className="mt-0.5 text-sm text-[#57534E]">
-                      Nigerian Restaurant &amp; Food Services · Dine-in, Takeaway &amp; WhatsApp
-                      Meal Inquiries
+                      Nigerian Restaurant &amp; Food Services · Dine-in, Takeaway, Bulk Meals &amp;
+                      Event Catering
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right: Enquiry Form with direct WhatsApp handoff */}
+            {/* Right: Meal or Catering Enquiry Form */}
             <div className="lg:col-span-7 bg-[#FFFFFF] rounded-xl border border-[#5A0B1E]/12 p-6 sm:p-8 lg:p-10">
-              <h2 className="font-display text-2xl font-semibold text-[#1C1917]">
-                Send a Meal or Order Enquiry
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h2 className="font-display text-2xl font-semibold text-[#1C1917]">
+                  {enquiryMode === 'catering'
+                    ? 'Request Event Catering'
+                    : 'Send a Meal or Order Enquiry'}
+                </h2>
+                <div className="inline-flex rounded-lg border border-[#5A0B1E]/15 p-1 bg-[#FAF7F2]">
+                  <button
+                    type="button"
+                    onClick={() => setEnquiryMode('meal')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      enquiryMode === 'meal'
+                        ? 'bg-[#5A0B1E] text-white'
+                        : 'text-[#57534E] hover:text-[#1C1917]'
+                    }`}
+                  >
+                    Meal Enquiry
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEnquiryMode('catering')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                      enquiryMode === 'catering'
+                        ? 'bg-[#5A0B1E] text-white'
+                        : 'text-[#57534E] hover:text-[#1C1917]'
+                    }`}
+                  >
+                    Event Catering
+                  </button>
+                </div>
+              </div>
+
               <p className="mt-2 text-sm text-[#57534E]">
-                Fill in your details below to prepare a message for Easi Mark Kitchen, then launch
-                WhatsApp to send it directly to{' '}
-                <span className="tabular-nums font-medium text-[#1C1917]">
-                  {RESTAURANT_INFO.phoneDisplay}
-                </span>
-                .
+                {enquiryMode === 'catering'
+                  ? 'Submit your event catering request directly to Easi Mark Kitchen management and follow up on WhatsApp.'
+                  : `Fill in your details below to prepare a message for ${siteSettings.restaurantName}, then launch WhatsApp to send it directly to ${phoneDisplay}.`}
               </p>
 
               {submittedMessage && (
@@ -179,15 +265,14 @@ export function ContactPage() {
                   <CheckCircle2 className="w-5 h-5 text-[#15803D] shrink-0 mt-0.5" />
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-[#15803D]">
-                      Your enquiry is ready to send
+                      {cateringSaved
+                        ? 'Your catering enquiry has been logged with our kitchen'
+                        : 'Your enquiry is ready to send'}
                     </p>
                     <p className="text-sm text-[#57534E]">
                       Click below to send this message directly via WhatsApp, or call{' '}
-                      <a
-                        href={RESTAURANT_INFO.phoneTel}
-                        className="font-semibold text-[#5A0B1E] underline tabular-nums"
-                      >
-                        {RESTAURANT_INFO.phoneDisplay}
+                      <a href={phoneTel} className="font-semibold text-[#5A0B1E] underline tabular-nums">
+                        {phoneDisplay}
                       </a>
                       .
                     </p>
@@ -205,62 +290,109 @@ export function ContactPage() {
               )}
 
               <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-5">
-                <div>
-                  <label
-                    htmlFor="contact-name"
-                    className="block text-sm font-medium text-[#1C1917]"
-                  >
-                    Full Name
-                  </label>
-                  <input
-                    id="contact-name"
-                    name="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Osas Eghosa"
-                    aria-invalid={Boolean(errors.name)}
-                    aria-describedby={errors.name ? 'contact-name-error' : undefined}
-                    className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] placeholder:text-[#57534E]/60 focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
-                  />
-                  {errors.name && (
-                    <p id="contact-name-error" className="mt-1.5 text-xs text-[#B91C1C]">
-                      {errors.name}
-                    </p>
-                  )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="contact-name"
+                      className="block text-sm font-medium text-[#1C1917]"
+                    >
+                      Full Name
+                    </label>
+                    <input
+                      id="contact-name"
+                      name="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g., Osas Eghosa"
+                      aria-invalid={Boolean(errors.name)}
+                      className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] placeholder:text-[#57534E]/60 focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                    />
+                    {errors.name && (
+                      <p className="mt-1.5 text-xs text-[#B91C1C]">{errors.name}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="contact-phone"
+                      className="block text-sm font-medium text-[#1C1917]"
+                    >
+                      Phone / WhatsApp Number
+                    </label>
+                    <input
+                      id="contact-phone"
+                      name="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g., 0803 000 0000"
+                      aria-invalid={Boolean(errors.phone)}
+                      className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] placeholder:text-[#57534E]/60 focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                    />
+                    {errors.phone && (
+                      <p className="mt-1.5 text-xs text-[#B91C1C]">{errors.phone}</p>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="contact-phone"
-                    className="block text-sm font-medium text-[#1C1917]"
-                  >
-                    Phone / WhatsApp Number
-                  </label>
-                  <input
-                    id="contact-phone"
-                    name="phone"
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g., 0803 000 0000"
-                    aria-invalid={Boolean(errors.phone)}
-                    aria-describedby={errors.phone ? 'contact-phone-error' : undefined}
-                    className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] placeholder:text-[#57534E]/60 focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
-                  />
-                  {errors.phone && (
-                    <p id="contact-phone-error" className="mt-1.5 text-xs text-[#B91C1C]">
-                      {errors.phone}
-                    </p>
-                  )}
-                </div>
+                {enquiryMode === 'catering' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[#1C1917]">Event Type</label>
+                      <input
+                        type="text"
+                        value={eventType}
+                        onChange={(e) => setEventType(e.target.value)}
+                        className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-3.5 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#1C1917]">Event Date</label>
+                      <input
+                        type="date"
+                        value={eventDate}
+                        onChange={(e) => setEventDate(e.target.value)}
+                        className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-3.5 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#1C1917]">Guests</label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={2000}
+                        value={guestCount}
+                        onChange={(e) => setGuestCount(e.target.value)}
+                        className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-3.5 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {enquiryMode === 'catering' && (
+                  <div>
+                    <label className="block text-sm font-medium text-[#1C1917]">
+                      Optional Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g., osas@example.com"
+                      className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label
                     htmlFor="contact-message"
                     className="block text-sm font-medium text-[#1C1917]"
                   >
-                    Enquiry or Meal Request
+                    {enquiryMode === 'catering'
+                      ? 'Requested Dishes & Tray Quantities'
+                      : 'Enquiry or Meal Request'}
                   </label>
                   <textarea
                     id="contact-message"
@@ -268,23 +400,29 @@ export function ContactPage() {
                     rows={4}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Let us know which meals you are asking about (e.g., Jollof Rice & Chicken, Black Soup & Semovita)..."
+                    placeholder={
+                      enquiryMode === 'catering'
+                        ? 'e.g., 50 packs of Jollof Rice & Chicken, 20 portions of Fried Rice & Beef...'
+                        : 'Let us know which meals you are asking about (e.g., Jollof Rice & Chicken, Black Soup & Semovita)...'
+                    }
                     aria-invalid={Boolean(errors.message)}
-                    aria-describedby={errors.message ? 'contact-message-error' : undefined}
                     className="mt-1.5 w-full rounded-lg border border-[#1C1917]/15 bg-[#FAF7F2] px-4 py-2.5 text-sm text-[#1C1917] placeholder:text-[#57534E]/60 focus:outline-none focus:ring-2 focus:ring-[#5A0B1E]"
                   />
                   {errors.message && (
-                    <p id="contact-message-error" className="mt-1.5 text-xs text-[#B91C1C]">
-                      {errors.message}
-                    </p>
+                    <p className="mt-1.5 text-xs text-[#B91C1C]">{errors.message}</p>
                   )}
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#5A0B1E] hover:bg-[#731129] text-[#FAF7F2] text-sm font-medium transition-colors cursor-pointer"
+                  disabled={submitting}
+                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#5A0B1E] hover:bg-[#731129] disabled:opacity-60 text-[#FAF7F2] text-sm font-medium transition-colors cursor-pointer"
                 >
-                  Prepare Enquiry Message
+                  {submitting
+                    ? 'Submitting Enquiry...'
+                    : enquiryMode === 'catering'
+                    ? 'Submit Catering Enquiry'
+                    : 'Prepare Enquiry Message'}
                 </button>
               </form>
             </div>
@@ -297,7 +435,7 @@ export function ContactPage() {
                 <h3 className="font-display text-lg font-semibold text-[#1C1917]">
                   Map: BDPA Street, Isihor, Ugbowo, Benin City
                 </h3>
-                <p className="text-xs text-[#57534E]">{RESTAURANT_INFO.address}</p>
+                <p className="text-xs text-[#57534E]">{address}</p>
               </div>
               <a
                 href={RESTAURANT_INFO.googleMapsUrl}

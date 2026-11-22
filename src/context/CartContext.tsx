@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { CartItem, Meal } from '../types/menu';
 import { MEALS } from '../data/meals';
 import { useAppAuth } from './AppAuthContext';
+import { useMenu } from './MenuContext';
 import { parseApiJson } from '../lib/api';
 
 interface CartContextValue {
@@ -25,10 +26,10 @@ interface ServerCartEntry {
   quantity: number;
 }
 
-function hydrateCartItems(entries: ServerCartEntry[]): CartItem[] {
+function hydrateCartItems(entries: ServerCartEntry[], catalog: Meal[]): CartItem[] {
   const hydrated: CartItem[] = [];
   for (const entry of entries) {
-    const meal = MEALS.find((m) => m.id === entry.mealId);
+    const meal = catalog.find((m) => m.id === entry.mealId) || MEALS.find((m) => m.id === entry.mealId);
     if (meal && Number.isInteger(entry.quantity) && entry.quantity > 0) {
       hydrated.push({ meal, quantity: entry.quantity });
     }
@@ -40,13 +41,13 @@ function getCartStorageKey(userId: string | null): string {
   return `easi_mark_kitchen_cart:${userId || 'guest'}`;
 }
 
-function readLocalCart(userId: string | null): CartItem[] {
+function readLocalCart(userId: string | null, catalog: Meal[]): CartItem[] {
   try {
     const raw = window.localStorage.getItem(getCartStorageKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return hydrateCartItems(parsed);
+    return hydrateCartItems(parsed, catalog);
   } catch {
     return [];
   }
@@ -75,23 +76,34 @@ function writeLocalCart(userId: string | null, cartItems: CartItem[]): void {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { isLoaded, isSignedIn, userId, getToken } = useAppAuth();
+  const { meals } = useMenu();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastAddedMessage, setLastAddedMessage] = useState<string | null>(null);
+
+  // Re-hydrate prices & metadata whenever live catalog updates (e.g. after Manager price approval)
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((item) => {
+        const fresh = meals.find((m) => m.id === item.meal.id);
+        return fresh ? { ...item, meal: fresh } : item;
+      })
+    );
+  }, [meals]);
 
   // Sync cart from protected /api/cart endpoint when signed in, or guest localStorage otherwise
   useEffect(() => {
     if (!isLoaded) return;
 
     if (!isSignedIn || !userId) {
-      setItems(readLocalCart(null));
+      setItems(readLocalCart(null, meals));
       setIsLoading(false);
       return;
     }
 
     const activeUserId = userId;
-    const localBackup = readLocalCart(activeUserId);
-    const guestItems = readLocalCart(null);
+    const localBackup = readLocalCart(activeUserId, meals);
+    const guestItems = readLocalCart(null, meals);
     const initialLocal = localBackup.length > 0 ? localBackup : guestItems;
     if (initialLocal.length > 0) {
       setItems(initialLocal);
@@ -121,7 +133,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         if (cancelled || !Array.isArray(data.items)) return;
 
         if (data.items.length > 0) {
-          const hydrated = hydrateCartItems(data.items);
+          const hydrated = hydrateCartItems(data.items, meals);
           setItems(hydrated);
           writeLocalCart(activeUserId, hydrated);
         } else if (initialLocal.length > 0) {
@@ -194,22 +206,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const addToCart = useCallback(
     (meal: Meal, quantity = 1): boolean => {
       const safeQty = Math.min(99, Math.max(1, quantity));
+      const latestMeal = meals.find((m) => m.id === meal.id) || meal;
       setItems((prev) => {
-        const existing = prev.find((item) => item.meal.id === meal.id);
+        const existing = prev.find((item) => item.meal.id === latestMeal.id);
         const next = existing
           ? prev.map((item) =>
-              item.meal.id === meal.id
-                ? { ...item, quantity: Math.min(99, item.quantity + safeQty) }
+              item.meal.id === latestMeal.id
+                ? { meal: latestMeal, quantity: Math.min(99, item.quantity + safeQty) }
                 : item
             )
-          : [...prev, { meal, quantity: safeQty }];
+          : [...prev, { meal: latestMeal, quantity: safeQty }];
         void persistCart(next);
         return next;
       });
-      setLastAddedMessage(`${safeQty} × ${meal.name} added to your order`);
+      setLastAddedMessage(`${safeQty} × ${latestMeal.name} added to your order`);
       return true;
     },
-    [persistCart]
+    [persistCart, meals]
   );
 
   const updateQuantity = useCallback(

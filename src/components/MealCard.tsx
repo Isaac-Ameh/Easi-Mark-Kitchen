@@ -13,8 +13,10 @@ interface MealCardProps {
 export function MealCard({ meal }: MealCardProps) {
   const { addToCart } = useCart();
   const [justAdded, setJustAdded] = useState(false);
+  const available = meal.isAvailable !== false;
 
   const handleAdd = () => {
+    if (!available) return;
     const added = addToCart(meal, 1);
     if (added) {
       setJustAdded(true);
@@ -34,6 +36,11 @@ export function MealCard({ meal }: MealCardProps) {
           title={meal.name}
           className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
         />
+        {!available && (
+          <span className="absolute top-3 right-3 px-2.5 py-1 rounded-md bg-[#1C1917]/85 text-[#FAF7F2] text-[11px] font-semibold">
+            Currently Unavailable
+          </span>
+        )}
       </Link>
 
       <div className="flex flex-col flex-1 p-5 sm:p-6">
@@ -67,14 +74,19 @@ export function MealCard({ meal }: MealCardProps) {
 
           <button
             type="button"
+            disabled={!available}
             onClick={handleAdd}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              justAdded
-                ? 'bg-[#15803D] text-white'
-                : 'bg-[#5A0B1E] text-[#FAF7F2] hover:bg-[#731129]'
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
+              !available
+                ? 'bg-[#1C1917]/15 text-[#57534E] cursor-not-allowed'
+                : justAdded
+                ? 'bg-[#15803D] text-white cursor-pointer'
+                : 'bg-[#5A0B1E] text-[#FAF7F2] hover:bg-[#731129] cursor-pointer'
             }`}
           >
-            {justAdded ? (
+            {!available ? (
+              <span>Unavailable</span>
+            ) : justAdded ? (
               <>
                 <Check className="w-4 h-4" />
                 <span>Added</span>

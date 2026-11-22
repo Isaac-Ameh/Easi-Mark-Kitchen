@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAppAuth } from '../context/AppAuthContext';
+import { useMenu } from '../context/MenuContext';
 import {
   RESTAURANT_IMAGES,
   RESTAURANT_INFO,
@@ -55,6 +56,7 @@ export function CartPage() {
     clearCart,
   } = useCart();
   const { isSignedIn, getToken, email } = useAppAuth();
+  const { siteSettings } = useMenu();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [customerNote, setCustomerNote] = useState('');
@@ -66,6 +68,12 @@ export function CartPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [fallbackAuthUrl, setFallbackAuthUrl] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<PaidReceipt | null>(null);
+
+  const phoneDisplay = siteSettings.phone || RESTAURANT_INFO.phoneDisplay;
+  const phoneDigits = phoneDisplay.replace(/[^0-9]/g, '');
+  const phoneTel = phoneDigits.startsWith('0')
+    ? `tel:+234${phoneDigits.slice(1)}`
+    : `tel:+${phoneDigits}`;
 
   const verifyPaymentOnServer = useCallback(
     async (reference: string) => {
@@ -119,14 +127,27 @@ export function CartPage() {
 
   const buildOrderMessage = (): string => {
     const lines = [
-      'Hello Easi Mark Kitchen,',
+      `Hello ${siteSettings.restaurantName},`,
       'I would like to order:',
-      ...items.map((item) => `- ${item.quantity}x ${item.meal.name}`),
+      ...items.map((item) => {
+        const linePrice =
+          typeof item.meal.price === 'number' && item.meal.price > 0
+            ? ` (${formatNaira(item.meal.price * item.quantity)})`
+            : '';
+        return `- ${item.quantity}x ${item.meal.name}${linePrice}`;
+      }),
     ];
+    if (!hasUnpricedItems && subtotal > 0) {
+      lines.push(`Estimated Subtotal: ${formatNaira(subtotal)}`);
+    }
     if (customerNote.trim()) {
       lines.push(`Note: ${customerNote.trim()}`);
     }
-    lines.push('Please confirm current pricing in Naira (₦) and preparation time.');
+    lines.push(
+      hasUnpricedItems
+        ? 'Please confirm current pricing in Naira (₦) and preparation time.'
+        : 'Please confirm preparation and pickup/delivery time.'
+    );
     return lines.join('\n');
   };
 
@@ -220,7 +241,7 @@ export function CartPage() {
       <PageHero
         eyebrow="Your Order"
         title="Order Cart"
-        subtitle="Review your selected Nigerian dishes, adjust quantities, and send your order directly via WhatsApp or phone."
+        subtitle="Review your selected Nigerian dishes, adjust quantities, and checkout online or send via WhatsApp."
         image={RESTAURANT_IMAGES.culinaryPrep}
         imageAlt="Pot of Nigerian Egusi Soup"
       />
@@ -298,7 +319,7 @@ export function CartPage() {
               </h2>
               <p className="mt-2.5 text-sm sm:text-base text-[#57534E] leading-relaxed">
                 Explore our Nigerian Main Dishes &amp; Meals and Soups &amp; Swallow to select items
-                and send your order to Easi Mark Kitchen.
+                and send your order to {siteSettings.restaurantName}.
               </p>
               <Link
                 to="/menu"
@@ -414,7 +435,7 @@ export function CartPage() {
                 </div>
               </div>
 
-              {/* Order Summary & WhatsApp / Phone Checkout */}
+              {/* Order Summary & WhatsApp / Phone / Paystack Checkout */}
               <aside className="lg:col-span-4 bg-[#FFFFFF] rounded-xl border border-[#5A0B1E]/12 p-6 sm:p-7 space-y-5">
                 <h2 className="font-display text-xl font-semibold text-[#1C1917]">
                   Order Summary
@@ -469,6 +490,36 @@ export function CartPage() {
                 )}
 
                 <div className="space-y-3 pt-1">
+                  {canPayOnline && (
+                    <button
+                      type="button"
+                      onClick={handlePayWithPaystack}
+                      disabled={paymentStatus !== 'idle'}
+                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-lg bg-[#1C1917] hover:bg-black disabled:opacity-60 text-[#FAF7F2] text-sm font-semibold transition-colors cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>
+                        {paymentStatus === 'initializing'
+                          ? 'Starting Paystack...'
+                          : paymentStatus === 'awaiting'
+                          ? 'Complete Payment in Paystack...'
+                          : paymentStatus === 'verifying'
+                          ? 'Verifying Payment...'
+                          : `Pay ${formatNaira(subtotal)} with Paystack`}
+                      </span>
+                    </button>
+                  )}
+
+                  {!isSignedIn && !hasUnpricedItems && subtotal > 0 && (
+                    <Link
+                      to="/sign-in?redirect_url=/cart"
+                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg border border-[#1C1917]/20 text-sm font-medium text-[#1C1917] hover:bg-[#F4EFE8] transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span>Sign In to Pay {formatNaira(subtotal)} Online</span>
+                    </Link>
+                  )}
+
                   <a
                     href={whatsappOrderUrl}
                     target="_blank"
@@ -476,7 +527,7 @@ export function CartPage() {
                     className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-lg bg-[#15803D] hover:bg-[#166534] text-white text-sm font-semibold transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" />
-                    <span>Order via WhatsApp ({RESTAURANT_INFO.phoneDisplay})</span>
+                    <span>Order via WhatsApp ({phoneDisplay})</span>
                   </a>
 
                   <button
@@ -498,32 +549,12 @@ export function CartPage() {
                   </button>
 
                   <a
-                    href={RESTAURANT_INFO.phoneTel}
+                    href={phoneTel}
                     className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#5A0B1E] hover:bg-[#731129] text-white text-sm font-medium transition-colors tabular-nums"
                   >
                     <Phone className="w-4 h-4" />
-                    <span>Call {RESTAURANT_INFO.phoneDisplay}</span>
+                    <span>Call {phoneDisplay}</span>
                   </a>
-
-                  {canPayOnline && (
-                    <button
-                      type="button"
-                      onClick={handlePayWithPaystack}
-                      disabled={paymentStatus !== 'idle'}
-                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-[#1C1917] hover:bg-black disabled:opacity-60 text-[#FAF7F2] text-sm font-medium transition-colors cursor-pointer"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>
-                        {paymentStatus === 'initializing'
-                          ? 'Starting Paystack...'
-                          : paymentStatus === 'awaiting'
-                          ? 'Complete Payment in Paystack...'
-                          : paymentStatus === 'verifying'
-                          ? 'Verifying Payment...'
-                          : `Pay ${formatNaira(subtotal)} with Paystack`}
-                      </span>
-                    </button>
-                  )}
 
                   {fallbackAuthUrl && (
                     <a
@@ -539,8 +570,9 @@ export function CartPage() {
                 </div>
 
                 <p className="text-xs text-[#57534E] leading-relaxed">
-                  Direct WhatsApp ordering confirms today&apos;s Naira (₦) price and kitchen
-                  readiness directly with Easi Mark Kitchen in Ugbowo.
+                  {hasUnpricedItems
+                    ? `Direct WhatsApp ordering confirms today's Naira (₦) price and kitchen readiness directly with ${siteSettings.restaurantName}.`
+                    : `Pay securely online via Paystack when signed in, or send your order directly via WhatsApp to ${phoneDisplay}.`}
                 </p>
               </aside>
             </div>

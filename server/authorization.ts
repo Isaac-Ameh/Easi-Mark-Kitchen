@@ -2,7 +2,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth, type clerkClient as ClerkClientType } from '@clerk/express';
 import { getSupabaseAdmin, isSupabaseConfigured } from './supabase.ts';
 
-export type AppRole = 'customer' | 'staff' | 'owner';
+// 'owner' in DB schema corresponds to full-access Manager; 'manager' alias is also accepted cleanly.
+export type AppRole = 'customer' | 'staff' | 'owner' | 'manager';
 
 export type AppPermission =
   | 'account:read'
@@ -13,16 +14,17 @@ export type AppPermission =
   | 'orders:update'
   | 'notifications:read'
   | 'menu:manage'
+  | 'pricing:approve'
   | 'categories:manage'
+  | 'catering:manage'
   | 'customers:read'
   | 'analytics:read'
+  | 'reports:read'
   | 'staff:manage'
   | 'settings:manage'
   | 'audit:read';
 
-export type RoleResolutionSource =
-  | 'supabase_database'
-  | 'default_customer';
+export type RoleResolutionSource = 'supabase_database' | 'default_customer';
 
 export interface AccessPolicy {
   role: AppRole;
@@ -31,6 +33,7 @@ export interface AccessPolicy {
 }
 
 export interface AuthAuditEntry {
+  id?: string;
   timestamp: string;
   actorUserId: string;
   actorRole: AppRole;
@@ -51,8 +54,29 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+const MANAGER_PERMISSIONS: AppPermission[] = [
+  'account:read',
+  'cart:read',
+  'cart:write',
+  'admin:access',
+  'orders:read',
+  'orders:update',
+  'notifications:read',
+  'menu:manage',
+  'pricing:approve',
+  'categories:manage',
+  'catering:manage',
+  'customers:read',
+  'analytics:read',
+  'reports:read',
+  'staff:manage',
+  'settings:manage',
+  'audit:read',
+];
+
 export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
   customer: ['account:read', 'cart:read', 'cart:write'],
+  // Staff can strictly view orders and update order processing statuses — no financial analytics, payment settings, staff management, or sensitive website/admin settings.
   staff: [
     'account:read',
     'cart:read',
@@ -62,22 +86,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
     'orders:update',
     'notifications:read',
   ],
-  owner: [
-    'account:read',
-    'cart:read',
-    'cart:write',
-    'admin:access',
-    'orders:read',
-    'orders:update',
-    'notifications:read',
-    'menu:manage',
-    'categories:manage',
-    'customers:read',
-    'analytics:read',
-    'staff:manage',
-    'settings:manage',
-    'audit:read',
-  ],
+  owner: [...MANAGER_PERMISSIONS],
+  manager: [...MANAGER_PERMISSIONS],
 };
 
 export const VALID_MEAL_IDS = new Set([
@@ -92,6 +102,13 @@ export const VALID_MEAL_IDS = new Set([
   'black-soup',
   'ogbono-soup',
 ]);
+
+// Bounded in-memory audit trail synchronized alongside Supabase audit_logs
+export const recentAuditLogs: AuthAuditEntry[] = [];
+
+export function isManagerRole(role: AppRole | string | undefined | null): boolean {
+  return role === 'owner' || role === 'manager';
+}
 
 export function normalizeClerkEnvValue(raw: string | undefined): string {
   let val = (raw || '').trim();
@@ -134,10 +151,11 @@ export async function isOwnerInitialized(): Promise<boolean> {
       const { count } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
-        .eq('role', 'owner');
+        .in('role', ['owner', 'manager']);
       if ((count ?? 0) > 0) return true;
+      return false;
     } catch {
-      // ignore
+      // fall through
     }
   }
   return true;
@@ -148,6 +166,15 @@ export function isOwnerProvisioningConfigured(): boolean {
 }
 
 export function recordAuthAuditEvent(entry: AuthAuditEntry): void {
+  const normalized: AuthAuditEntry = {
+    id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    ...entry,
+  };
+  recentAuditLogs.unshift(normalized);
+  if (recentAuditLogs.length > 200) {
+    recentAuditLogs.length = 200;
+  }
+
   const supabase = getSupabaseAdmin();
   if (supabase) {
     void supabase.from('audit_logs').insert({
@@ -167,13 +194,6 @@ export function recordAuthAuditEvent(entry: AuthAuditEntry): void {
   );
 }
 
-/**
- * Fully automated database-backed role resolution and profile provisioning:
- * 1. Checks if profile exists in Supabase.
- * 2. If pending staff invitation matches verified primary email, automatically links profile and marks invitation accepted.
- * 3. Otherwise, creates/ensures profile with role = 'customer'.
- * 4. Never auto-promotes first user and never trusts client claims.
- */
 export async function resolveAccessPolicyFromIdentity(params: {
   userId: string;
   verifiedPrimaryEmail: string | null;
@@ -181,10 +201,11 @@ export async function resolveAccessPolicyFromIdentity(params: {
 }): Promise<AccessPolicy> {
   const supabase = getSupabaseAdmin();
   const fallbackEmail = params.verifiedPrimaryEmail || `${params.userId}@clerk.user`;
+  const normalizedEmail = (params.verifiedPrimaryEmail || '').trim().toLowerCase();
+  const isPrimaryOwner = normalizedEmail === 'mularn622@gmail.com';
 
   if (supabase) {
     try {
-      // 1. Check existing profile in database
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('role')
@@ -192,7 +213,18 @@ export async function resolveAccessPolicyFromIdentity(params: {
         .maybeSingle();
 
       if (existingProfile) {
-        const role = (existingProfile.role as AppRole) || 'customer';
+        let rawRole = existingProfile.role as AppRole;
+        if (isPrimaryOwner && rawRole !== 'owner') {
+          rawRole = 'owner';
+          await supabase
+            .from('profiles')
+            .update({ role: 'owner', updated_at: new Date().toISOString() })
+            .eq('id', params.userId);
+        }
+        const role: AppRole =
+          rawRole === 'owner' || rawRole === 'manager' || rawRole === 'staff'
+            ? rawRole
+            : 'customer';
         return {
           role,
           permissions: [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.customer)],
@@ -200,27 +232,27 @@ export async function resolveAccessPolicyFromIdentity(params: {
         };
       }
 
-      // 2. Check pending staff invitation matching verified primary email case-insensitively
-      let assignedRole: AppRole = 'customer';
-      if (params.verifiedPrimaryEmail) {
+      let assignedRole: AppRole = isPrimaryOwner ? 'owner' : 'customer';
+      if (!isPrimaryOwner && params.verifiedPrimaryEmail) {
         const { data: invite } = await supabase
           .from('staff_invitations')
           .select('role, permissions, status')
-          .eq('email', params.verifiedPrimaryEmail.trim().toLowerCase())
+          .eq('email', normalizedEmail)
           .eq('status', 'pending')
           .maybeSingle();
 
         if (invite) {
-          assignedRole = (invite.role as AppRole) || 'staff';
+          const inviteRole = invite.role as AppRole;
+          assignedRole =
+            inviteRole === 'owner' || inviteRole === 'manager' ? 'owner' : 'staff';
           await supabase
             .from('staff_invitations')
             .update({ status: 'accepted' })
-            .eq('email', params.verifiedPrimaryEmail.trim().toLowerCase());
+            .eq('email', normalizedEmail);
         }
       }
 
-      // 3. Create profile in database atomically
-      await supabase.from('profiles').insert({
+      await supabase.from('profiles').upsert({
         id: params.userId,
         email: fallbackEmail,
         full_name: params.fullName,
@@ -238,17 +270,14 @@ export async function resolveAccessPolicyFromIdentity(params: {
     }
   }
 
+  const fallbackRole: AppRole = isPrimaryOwner ? 'owner' : 'customer';
   return {
-    role: 'customer',
-    permissions: [...ROLE_PERMISSIONS.customer],
+    role: fallbackRole,
+    permissions: [...(ROLE_PERMISSIONS[fallbackRole] || ROLE_PERMISSIONS.customer)],
     source: 'default_customer',
   };
 }
 
-
-/**
- * Middleware factory verifying Clerk session token and resolving Supabase database role.
- */
 export function createRequireAuthenticatedSession(
   clerkClient: typeof ClerkClientType | null
 ) {
@@ -318,7 +347,7 @@ export function requirePermission(permission: AppPermission) {
     const policy = appAuth?.policy;
 
     if (!appAuth || !policy || !policy.permissions.includes(permission)) {
-      if (appAuth && req.path.startsWith('/admin')) {
+      if (appAuth && req.originalUrl.includes('/admin')) {
         recordAuthAuditEvent({
           timestamp: new Date().toISOString(),
           actorUserId: appAuth.userId,
@@ -345,8 +374,12 @@ export function requireRole(...allowedRoles: AppRole[]) {
     const appAuth = req.appAuth;
     const role = appAuth?.policy.role;
 
-    if (!appAuth || !role || !allowedRoles.includes(role)) {
-      if (appAuth && req.path.startsWith('/admin')) {
+    const effectiveAllowed = new Set<AppRole>(allowedRoles);
+    if (effectiveAllowed.has('owner')) effectiveAllowed.add('manager');
+    if (effectiveAllowed.has('manager')) effectiveAllowed.add('owner');
+
+    if (!appAuth || !role || !effectiveAllowed.has(role)) {
+      if (appAuth && req.originalUrl.includes('/admin')) {
         recordAuthAuditEvent({
           timestamp: new Date().toISOString(),
           actorUserId: appAuth.userId,

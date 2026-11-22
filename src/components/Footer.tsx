@@ -1,12 +1,21 @@
 import { Link } from 'react-router-dom';
-import { MapPin, MessageCircle, Phone } from 'lucide-react';
+import { Clock, MapPin, MessageCircle, Phone } from 'lucide-react';
 import { RESTAURANT_INFO, buildWhatsAppOrderUrl } from '../data/meals';
+import { useMenu } from '../context/MenuContext';
 import { BrandMark } from './BrandMark';
 
 export function Footer() {
+  const { siteSettings, meals } = useMenu();
   const currentYear = new Date().getFullYear();
+  const phoneDisplay = siteSettings.phone || RESTAURANT_INFO.phoneDisplay;
+  const address = siteSettings.address || RESTAURANT_INFO.address;
+  const phoneDigits = phoneDisplay.replace(/[^0-9]/g, '');
+  const phoneTel = phoneDigits.startsWith('0')
+    ? `tel:+234${phoneDigits.slice(1)}`
+    : `tel:+${phoneDigits}`;
+
   const quickWhatsAppUrl = buildWhatsAppOrderUrl(
-    'Hello Easi Mark Kitchen, I would like to ask about today’s menu and place an order.'
+    `Hello ${siteSettings.restaurantName}, I would like to ask about today’s menu and place an order.`
   );
 
   return (
@@ -33,11 +42,11 @@ export function Footer() {
                 <span>Order on WhatsApp</span>
               </a>
               <a
-                href={RESTAURANT_INFO.phoneTel}
+                href={phoneTel}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/25 hover:bg-white/10 text-white text-xs font-semibold transition-colors tabular-nums"
               >
                 <Phone className="w-3.5 h-3.5" />
-                <span>Call {RESTAURANT_INFO.phoneDisplay}</span>
+                <span>Call {phoneDisplay}</span>
               </a>
             </div>
           </div>
@@ -61,11 +70,6 @@ export function Footer() {
               <li>
                 <Link to="/about" className="text-[#FAF7F2]/85 hover:text-white transition-colors">
                   About Us
-                </Link>
-              </li>
-              <li>
-                <Link to="/gallery" className="text-[#FAF7F2]/85 hover:text-white transition-colors">
-                  Food Gallery
                 </Link>
               </li>
               <li>
@@ -108,7 +112,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/menu" className="text-[#FAF7F2]/85 hover:text-white transition-colors">
-                  View All 10 Dishes
+                  View All {meals.length} Dishes
                 </Link>
               </li>
             </ul>
@@ -122,16 +126,20 @@ export function Footer() {
             <ul className="space-y-3 text-sm text-[#FAF7F2]/85">
               <li className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-[#86EFAC] shrink-0 mt-0.5" />
-                <span>{RESTAURANT_INFO.address}</span>
+                <span>{address}</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-[#86EFAC] shrink-0" />
                 <a
-                  href={RESTAURANT_INFO.phoneTel}
+                  href={phoneTel}
                   className="tabular-nums hover:text-white transition-colors font-medium"
                 >
-                  {RESTAURANT_INFO.phoneDisplay}
+                  {phoneDisplay}
                 </a>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <Clock className="w-4 h-4 text-[#86EFAC] shrink-0 mt-0.5" />
+                <span className="text-xs leading-relaxed">{siteSettings.openingHours}</span>
               </li>
               <li>
                 <a
@@ -150,7 +158,7 @@ export function Footer() {
         {/* Bottom Legal Row */}
         <div className="mt-12 pt-8 border-t border-[#FAF7F2]/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#FAF7F2]/70">
           <p>
-            &copy; {currentYear} {RESTAURANT_INFO.name}. {RESTAURANT_INFO.shortLocation}.
+            &copy; {currentYear} {siteSettings.restaurantName}. {RESTAURANT_INFO.shortLocation}.
           </p>
           <p>Menu items &amp; meal photography representative of Nigerian home-style dishes.</p>
         </div>

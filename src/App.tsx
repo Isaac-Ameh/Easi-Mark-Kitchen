@@ -17,6 +17,7 @@ import {
 } from './lib/clerkConfig';
 import { parseApiJson } from './lib/api';
 import { AppAuthProvider } from './context/AppAuthContext';
+import { MenuProvider } from './context/MenuContext';
 import { CartProvider } from './context/CartContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -25,7 +26,6 @@ import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { MealDetailPage } from './pages/MealDetailPage';
 import { AboutPage } from './pages/AboutPage';
-import { GalleryPage } from './pages/GalleryPage';
 import { ContactPage } from './pages/ContactPage';
 import { CartPage } from './pages/CartPage';
 import { SignInPage } from './pages/SignInPage';
@@ -79,7 +79,6 @@ function AnimatedRoutes() {
             <Route path="/menu" element={<MenuPage />} />
             <Route path="/menu/:id" element={<MealDetailPage />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/gallery" element={<GalleryPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/sign-in/*" element={<SignInPage />} />
@@ -170,10 +169,12 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <BrowserRouter>
         <ClerkAndAuthWrapper>
-          <CartProvider>
-            <ScrollToTop />
-            <AnimatedRoutes />
-          </CartProvider>
+          <MenuProvider>
+            <CartProvider>
+              <ScrollToTop />
+              <AnimatedRoutes />
+            </CartProvider>
+          </MenuProvider>
         </ClerkAndAuthWrapper>
       </BrowserRouter>
     </MotionConfig>

@@ -10,24 +10,31 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import {
-  MEALS,
   RESTAURANT_IMAGES,
   RESTAURANT_INFO,
   buildWhatsAppOrderUrl,
   formatPrice,
 } from '../data/meals';
 import { useCart } from '../context/CartContext';
+import { useMenu } from '../context/MenuContext';
 import { DishImage } from '../components/DishImage';
 import { MealCard } from '../components/MealCard';
 import { PageHero } from '../components/PageHero';
 
 export function MealDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const meal = MEALS.find((m) => m.id === id);
+  const { meals, siteSettings } = useMenu();
+  const meal = meals.find((m) => m.id === id);
   const { addToCart, totalItems } = useCart();
 
   const [quantity, setQuantity] = useState(1);
   const [addedFeedback, setAddedFeedback] = useState(false);
+
+  const phoneDisplay = siteSettings.phone || RESTAURANT_INFO.phoneDisplay;
+  const phoneDigits = phoneDisplay.replace(/[^0-9]/g, '');
+  const phoneTel = phoneDigits.startsWith('0')
+    ? `tel:+234${phoneDigits.slice(1)}`
+    : `tel:+${phoneDigits}`;
 
   useEffect(() => {
     setQuantity(1);
@@ -62,11 +69,13 @@ export function MealDetailPage() {
     );
   }
 
-  const relatedMeals = MEALS.filter(
-    (m) => m.category === meal.category && m.id !== meal.id
-  ).slice(0, 3);
+  const available = meal.isAvailable !== false;
+  const relatedMeals = meals
+    .filter((m) => m.category === meal.category && m.id !== meal.id)
+    .slice(0, 3);
 
   const handleAddToCart = () => {
+    if (!available) return;
     const added = addToCart(meal, quantity);
     if (added) {
       setAddedFeedback(true);
@@ -75,7 +84,11 @@ export function MealDetailPage() {
   };
 
   const directWhatsAppUrl = buildWhatsAppOrderUrl(
-    `Hello Easi Mark Kitchen, I would like to order ${quantity}x ${meal.name} and confirm the current price in Naira (₦).`
+    `Hello ${siteSettings.restaurantName}, I would like to order ${quantity}x ${meal.name}${
+      typeof meal.price === 'number' && meal.price > 0
+        ? ` (${formatPrice(meal.price)} each)`
+        : ' and confirm the current price in Naira (₦)'
+    }.`
   );
 
   return (
@@ -130,7 +143,9 @@ export function MealDetailPage() {
                   {formatPrice(meal.price)}
                 </span>
                 <span className="text-xs text-[#57534E]">
-                  Confirm current rate via {RESTAURANT_INFO.phoneDisplay}
+                  {typeof meal.price === 'number' && meal.price > 0
+                    ? 'Confirmed kitchen price'
+                    : `Confirm current rate via ${phoneDisplay}`}
                 </span>
               </div>
 
@@ -178,14 +193,19 @@ export function MealDetailPage() {
 
                 <button
                   type="button"
+                  disabled={!available}
                   onClick={handleAddToCart}
-                  className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg text-base font-medium transition-colors cursor-pointer ${
-                    addedFeedback
-                      ? 'bg-[#15803D] text-white'
-                      : 'bg-[#5A0B1E] hover:bg-[#731129] text-[#FAF7F2]'
+                  className={`w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg text-base font-medium transition-colors ${
+                    !available
+                      ? 'bg-[#1C1917]/15 text-[#57534E] cursor-not-allowed'
+                      : addedFeedback
+                      ? 'bg-[#15803D] text-white cursor-pointer'
+                      : 'bg-[#5A0B1E] hover:bg-[#731129] text-[#FAF7F2] cursor-pointer'
                   }`}
                 >
-                  {addedFeedback ? (
+                  {!available ? (
+                    <span>Currently Unavailable</span>
+                  ) : addedFeedback ? (
                     <>
                       <Check className="w-5 h-5" />
                       <span>Added to Order ({quantity})</span>
@@ -209,11 +229,11 @@ export function MealDetailPage() {
                 </a>
 
                 <a
-                  href={RESTAURANT_INFO.phoneTel}
+                  href={phoneTel}
                   className="w-full inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg border border-[#1C1917]/15 text-sm font-medium text-[#1C1917] hover:bg-[#F4EFE8] transition-colors tabular-nums"
                 >
                   <Phone className="w-4 h-4 text-[#5A0B1E]" />
-                  <span>Call {RESTAURANT_INFO.phoneDisplay}</span>
+                  <span>Call {phoneDisplay}</span>
                 </a>
 
                 {totalItems > 0 && (

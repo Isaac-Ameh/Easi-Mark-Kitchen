@@ -3,7 +3,7 @@ import { useAuth, useClerk, useUser } from '@clerk/react';
 import { isClerkConfigured } from '../lib/clerkConfig';
 import { parseApiJson } from '../lib/api';
 
-export type AppRole = 'customer' | 'staff' | 'owner';
+export type AppRole = 'customer' | 'staff' | 'owner' | 'manager';
 
 export interface AppAuthState {
   isClerkConfigured: boolean;
@@ -15,6 +15,7 @@ export interface AppAuthState {
   email: string | null;
   imageUrl: string | null;
   role: AppRole;
+  isManager: boolean;
   permissions: string[];
   canAccessAdmin: boolean;
   hasPermission: (permission: string) => boolean;
@@ -83,13 +84,15 @@ function ClerkBackedAuthProvider({ children }: { children: React.ReactNode }) {
 
       const resolvedRole = data.authorization?.role;
       const validRole: AppRole =
-        resolvedRole === 'owner' || resolvedRole === 'staff' ? resolvedRole : 'customer';
+        resolvedRole === 'owner' || resolvedRole === 'manager' || resolvedRole === 'staff'
+          ? resolvedRole
+          : 'customer';
       const resolvedPerms = Array.isArray(data.authorization?.permissions)
         ? data.authorization!.permissions
         : [];
       const adminAllowed =
         Boolean(data.authorization?.canAccessAdmin) &&
-        (validRole === 'owner' || validRole === 'staff');
+        (validRole === 'owner' || validRole === 'manager' || validRole === 'staff');
 
       setRole(validRole);
       setPermissions(resolvedPerms);
@@ -113,6 +116,8 @@ function ClerkBackedAuthProvider({ children }: { children: React.ReactNode }) {
     [permissions]
   );
 
+  const isManager = role === 'owner' || role === 'manager';
+
   const value: AppAuthState = {
     isClerkConfigured: true,
     isLoaded,
@@ -123,6 +128,7 @@ function ClerkBackedAuthProvider({ children }: { children: React.ReactNode }) {
     email: user?.primaryEmailAddress?.emailAddress || null,
     imageUrl: user?.imageUrl || null,
     role,
+    isManager,
     permissions,
     canAccessAdmin,
     hasPermission,
@@ -150,6 +156,7 @@ function UnconfiguredAuthProvider({ children }: { children: React.ReactNode }) {
     email: null,
     imageUrl: null,
     role: 'customer',
+    isManager: false,
     permissions: [],
     canAccessAdmin: false,
     hasPermission: () => false,

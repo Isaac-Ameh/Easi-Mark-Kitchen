@@ -11,9 +11,26 @@ export interface Meal {
   image: string;
   imageAlt: string;
   featured?: boolean;
+  isAvailable?: boolean;
 }
 
 export interface CartItem {
   meal: Meal;
   quantity: number;
 }
+
+export interface WebsiteSettings {
+  restaurantName: string;
+  currency: string;
+  isOpen: boolean;
+  address: string;
+  phone: string;
+  email: string;
+  openingHours: string;
+  heroSubtitle: string;
+  heroDescription: string;
+  welcomeHeading: string;
+  welcomeBody: string;
+  menuNotice: string;
+}
+
