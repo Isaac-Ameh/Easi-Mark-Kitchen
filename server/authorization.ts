@@ -194,6 +194,13 @@ export function recordAuthAuditEvent(entry: AuthAuditEntry): void {
   );
 }
 
+export function getOwnerEmails(): string[] {
+  return (process.env.OWNER_EMAILS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export async function resolveAccessPolicyFromIdentity(params: {
   userId: string;
   verifiedPrimaryEmail: string | null;
@@ -202,7 +209,7 @@ export async function resolveAccessPolicyFromIdentity(params: {
   const supabase = getSupabaseAdmin();
   const fallbackEmail = params.verifiedPrimaryEmail || `${params.userId}@clerk.user`;
   const normalizedEmail = (params.verifiedPrimaryEmail || '').trim().toLowerCase();
-  const isPrimaryOwner = normalizedEmail === 'mularn622@gmail.com';
+  const isPrimaryOwner = Boolean(normalizedEmail) && getOwnerEmails().includes(normalizedEmail);
 
   if (supabase) {
     try {
